@@ -1,11 +1,31 @@
 #!/usr/bin/env python
 # vim: fileencoding=utf-8 tabstop=4 softtabstop=4 shiftwidth=4 expandtab
+#
+# Copyright 2013 Jinuk Kim, rein01@gmail.com
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 import datetime
+import os
 
 from git import Repo
 from git.objects import Commit
+import gflags
 from pytz import FixedOffset
+
+
+FLAGS = gflags.FLAGS
 
 
 def read_commits(repo_path, rev=None, stats=None):
@@ -24,7 +44,7 @@ def read_commits(repo_path, rev=None, stats=None):
     return stats
 
 
-def print_graph(stats, minDay, maxDay):
+def print_graph(output, stats, minDay, maxDay):
     firstDay = minDay - datetime.timedelta(days=minDay.weekday())
     skip = (7 - maxDay.weekday())
     lastDay = maxDay + datetime.timedelta(days=skip)
@@ -45,77 +65,88 @@ def print_graph(stats, minDay, maxDay):
     height = 12 * 7 - 2 + margin * 2 + 10
 
     # svg boilerplate
-    print '<?xml version="1.0" standalone="no"?>'
-    print '<svg xmlns="http://www.w3.org/2000/svg"',
-    print 'width="{}" height="{}">'.format(width, height)
-    print '<!-- {} ~ {} -->'.format(minDay, maxDay)
-    print '<!-- {} ~ {} -->'.format(firstDay, lastDay)
+    print >> output, '<?xml version="1.0" standalone="no"?>'
+    print >> output, '<svg xmlns="http://www.w3.org/2000/svg"',
+    print >> output, 'width="{}" height="{}">'.format(width, height)
+    print >> output, '<!-- {} ~ {} -->'.format(minDay, maxDay)
+    print >> output, '<!-- {} ~ {} -->'.format(firstDay, lastDay)
 
     # weekday texts
     wday_text = ('<text dx="10" dy="{0}" text-anchor="middle" '
                  'style="font-size: 9px; fill: {1};">{2}</text>')
-    print wday_text.format(28, '#ccc', 'M')
-    print wday_text.format(52, '#ccc', 'W')
-    print wday_text.format(76, '#ccc', 'F')
-    print wday_text.format(100, '#f99', 'S')
+    print >> output, wday_text.format(28, '#ccc', 'M')
+    print >> output, wday_text.format(52, '#ccc', 'W')
+    print >> output, wday_text.format(76, '#ccc', 'F')
+    print >> output, wday_text.format(100, '#f99', 'S')
 
     # month labels
     month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     # print month-label on column which has first monday of the month
+    date_str = ('<text dx="{0}" dy="15" style="font-size: 9px; fill: #ccc">'
+                '{1}</text>')
     date = firstDay
     column = 0
     while date < lastDay - datetime.timedelta(days=7):
         if date.day <= 7:
-            print ('<text dx="{0}" dy="15" '
-                   'style="font-size: 9px; fill: #ccc">{1}</text>').format(
-                        column * 12 + 20, month[date.month - 1])
+            print >> output, date_str.format(column * 12 + 20,
+                                             month[date.month - 1])
         column += 1
         date += datetime.timedelta(days=7)
 
     # each day/week
-    print '<g transform="translate({}, {})">'.format(margin + 10, margin + 10)
+    print >> output, '<g transform="translate({0}, {0})">'.format(margin + 10)
     cell = ('   <rect width="10" height="10" y="{0}" style="fill: {1};">'
             '{2}: {3}</rect>')
     empty = '   <rect width="10" height="10" y="{0}" style="fill: {1};"/>'
     date = firstDay
     column = 0
     while date < lastDay:
-        print '  <g transform="translate({}, 0)">'.format(column * 12)
+        print >> output, '  <g transform="translate({}, 0)">'.format(column * 12)
         for i in xrange(7):
             data = _get_data(date)
             color = _get_color(data)
             if data > 0:
-                print cell.format(i * 12, color, date, data)
+                print >> output, cell.format(i * 12, color, date, data)
             else:
-                print empty.format(i * 12, color)
+                print >> output, empty.format(i * 12, color)
             date += datetime.timedelta(days=1)
         column += 1
-        print '  </g>'
+        print >> output, '  </g>'
 
-    print '</g>'
-    print '</svg>'
+    print >> output, '</g>'
+    print >> output, '</svg>'
+
+
+gflags.DEFINE_string('since', None, 'generate stats from this day')
+gflags.DEFINE_string('out', None, 'output file to save graph')
+gflags.MarkFlagAsRequired('out')
+
+
+def main(argv):
+    try:
+        argv = FLAGS(argv)  # parse flags
+    except gflags.FlagsError, e:
+        print '%s\nUsage: %s ARGS repositories\n%s' % (e, sys.argv[0], FLAGS)
+        sys.exit(1)
+
+    if FLAGS.since:
+        daySince = datetime.datetime.strptime(FLAGS.since, '%Y-%m-%d').date()
+    else:
+        daySince = datetime.date.today() - datetime.timedelta(days=366)
+
+    stats = {}
+    repoSet = set(os.path.abspath(arg) for arg in argv[1:])
+    for repo in repoSet:
+        print 'reading {}'.format(repo)
+        stats = read_commits(repo, stats=stats)
+
+    lastDay = max(stats.keys())
+    with open(FLAGS.out, 'w+') as out:
+        print_graph(out, stats, daySince, lastDay)
 
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 2:
-        print 'Usage:', sys.argv[0], 'repo-path [rev]'
-        sys.exit(1)
-
-    if len(sys.argv) > 2:
-        rev = sys.argv[2]
-    else:
-        rev = None
-    stats = read_commits(sys.argv[1], rev)
-
-    if rev:
-        minDay = min(stats.keys())
-        maxDay = max(stats.keys())
-    else:
-        # if rev is not given,
-        # draw stats from 1 year ago (from today)
-        maxDay = datetime.date.today()
-        minDay = maxDay - datetime.timedelta(days=365)
-    print_graph(stats, minDay, maxDay)
+    main(sys.argv)
