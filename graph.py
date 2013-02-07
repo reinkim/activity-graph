@@ -18,25 +18,26 @@
 
 import datetime
 import os
+import subprocess
+import time
 
-from git import Repo
-from git.objects import Commit
 import gflags
-from pytz import FixedOffset
 
 
 FLAGS = gflags.FLAGS
 
 
-def read_commits(repo_path, rev=None, stats=None):
+def read_commits(repo_path, branches, since, stats=None):
     stats = stats or {}
-    rev = rev or 'master'
-    repo = Repo(repo_path)
-
-    for commit in Commit.iter_items(repo, rev):
-        tz = FixedOffset(-commit.committer_tz_offset / 60)
-        date = datetime.datetime.fromtimestamp(commit.committed_date, tz)
-        date = date.date()
+    local_offset = datetime.timedelta(seconds=time.timezone)
+    log_cmd = ['git', 'log', '--pretty=format:%ci'] + list(branches)
+    result = subprocess.check_output(log_cmd, cwd=repo_path, shell=False)
+    for line in result.split('\n'):
+        d, t, tz = line.split(' ')
+        d = datetime.datetime.strptime(d, '%Y-%m-%d')
+        t = datetime.datetime.strptime(t, '%H:%M:%S').time()
+        delta = datetime.timedelta(hours=int(tz)/100, minutes=int(tz)%100)
+        date = (datetime.datetime.combine(d, t) + delta + local_offset).date()
         if date in stats:
             stats[date] += 1
         else:
@@ -132,19 +133,30 @@ def main(argv):
         sys.exit(1)
 
     if FLAGS.since:
-        daySince = datetime.datetime.strptime(FLAGS.since, '%Y-%m-%d').date()
+        since = datetime.datetime.strptime(FLAGS.since, '%Y-%m-%d').date()
     else:
-        daySince = datetime.date.today() - datetime.timedelta(days=366)
+        since = datetime.date.today() - datetime.timedelta(days=366)
+
+    repos = {}
+    for repo in argv[1:]:
+        if '@' not in repo:
+            repo_path = os.path.abspath(repo)
+            branch = 'master'
+        else:
+            repo_path, branch = repo.split('@', 1)
+            repo_path = os.path.abspath(repo_path)
+
+        if repo_path not in repos:
+            repos[repo_path] = set()
+        repos[repo_path].add(branch)
 
     stats = {}
-    repoSet = set(os.path.abspath(arg) for arg in argv[1:])
-    for repo in repoSet:
-        print 'reading {}'.format(repo)
-        stats = read_commits(repo, stats=stats)
+    for repo_path, branches in repos.iteritems():
+        stats = read_commits(repo_path, branches, since, stats)
 
-    lastDay = max(stats.keys())
+    last_day = max(stats.keys())
     with open(FLAGS.out, 'w+') as out:
-        print_graph(out, stats, daySince, lastDay)
+        print_graph(out, stats, since, last_day)
 
 
 if __name__ == '__main__':
