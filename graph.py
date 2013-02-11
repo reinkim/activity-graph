@@ -121,6 +121,7 @@ def print_graph(output, stats, minDay, maxDay):
 
 
 gflags.DEFINE_string('since', None, 'generate stats from this day')
+gflags.DEFINE_string('until', None, 'generate stats to this day')
 gflags.DEFINE_string('out', None, 'output file to save graph')
 gflags.MarkFlagAsRequired('out')
 
@@ -136,6 +137,11 @@ def main(argv):
         since = datetime.datetime.strptime(FLAGS.since, '%Y-%m-%d').date()
     else:
         since = datetime.date.today() - datetime.timedelta(days=366)
+
+    if FLAGS.until:
+        until = datetime.datetime.strptime(FLAGS.until, '%Y-%m-%d').date()
+    else:
+        until = datetime.date.today()
 
     repos = {}
     for repo in argv[1:]:
@@ -154,9 +160,8 @@ def main(argv):
     for repo_path, branches in repos.iteritems():
         stats = read_commits(repo_path, branches, since, stats)
 
-    last_day = max(stats.keys())
     with open(FLAGS.out, 'w+') as out:
-        print_graph(out, stats, since, last_day)
+        print_graph(out, stats, since, until)
 
 
 if __name__ == '__main__':
