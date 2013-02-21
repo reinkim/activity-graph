@@ -207,9 +207,6 @@ def main(argv):
     for repo_path, branches in repos.iteritems():
         stats = read_commits(repo_path, branches, since, stats)
 
-    for i in xrange(7):
-        print stats[i * 24:(i + 1) * 24]
-
     with open(FLAGS.out, 'w+') as out:
         print_heatmap(out, stats)
 
