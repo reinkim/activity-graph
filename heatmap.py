@@ -39,9 +39,12 @@ def read_commits(repo_path, branches, since, stats=None):
         d = datetime.datetime.strptime(d, '%Y-%m-%d')
         t = datetime.datetime.strptime(t, '%H:%M:%S').time()
         delta = datetime.timedelta(hours=int(tz)/100, minutes=int(tz)%100)
-        dt = datetime.datetime.combine(d, t) + delta + local_offset
-        if dt.date() < since:
+        dt = datetime.datetime.combine(d, t)
+        dt_local = dt + delta + local_offset
+        if dt_local.date() < since:
             continue
+        # Intentionaly using auhtor's timezone, since I'm interested in
+        # author-time (in one's timezone)
         stats[dt.weekday() * 24 + dt.hour] += 1
     return stats
 
@@ -53,8 +56,6 @@ def print_heatmap(output, stats):
 
     maxima = max(stats)
 
-#    c1 = colorsys.rgb_to_hls(1.0, 0.0, 0.0)
-#    c2 = colorsys.rgb_to_hls(1.0, 1.0, 1.0)
     c1 = colorsys.rgb_to_hls(0.1176, 0.4078, 0.1372)
     c2 = colorsys.rgb_to_hls(0.8392, 0.9019, 0.5215)
 
@@ -79,7 +80,7 @@ def print_heatmap(output, stats):
     ch = 18
     margin = 10
     width = margin * 2 + (cw + 1) * 24 - 1 + 10 + 10
-    height = margin * 2 + (ch + 1) * 7 - 1 + 10
+    height = margin * 2 + (ch + 1) * 7 - 1 + 10 + 10 +  60 + 10
 
     # svg boilerplate
     print >> output, '<?xml version="1.0" standalone="no"?>'
@@ -119,6 +120,7 @@ def print_heatmap(output, stats):
           'style="stroke-width: 1; stroke: black; stroke-opacity: 1;"/>')
     for hour in xrange(24 + 1):
         print >> output, vr.format(x=(cw + 1) * hour, y=(ch + 1) * 7)
+
     # draw label
     wday_text = ('  <text x="{x}" y="{y}" '
                  'style="font-size: 10; fill: black;">{text}</text>')
@@ -130,41 +132,39 @@ def print_heatmap(output, stats):
                  '{text}</text>')
     for i, h in enumerate(xrange(25)):
         print >> output, hour_text.format(x=i * (cw + 1), y=-7, text=str(h))
-
     print >> output, '</g>'
 
+    # second block
+    hourly = [0] * 24
+    for hour in xrange(24):
+        for wday in xrange(7):
+            hourly[hour] += _get_data(wday, hour)
+    maxima = max(hourly)
 
+    print >> output, '<g transform="translate({0}, {1})">'.format(
+                        margin + 10 + 10, height - margin - 70)
+    bar = ('  <rect width="%d" height="{height}" x="{x}" y="{y}" '
+           'style="fill: {fill};"/>') % (cw - 4,)
+    bar_text = ('<text x="{x}" y="%d" '
+                'style="font-size: 10; fill: black; text-anchor: middle;">'
+                '{text}</text>') % (60 + 10 + 9)
+
+    total = sum(hourly)
+    for hour in xrange(24):
+        d = hourly[hour]
+        if d == 0:
+            continue
+        bar_height = 60.0 / maxima * d
+        text = '%d %%' % int(100.0 * d / total)
+        print >> output, bar.format(x=hour * (cw + 1) + 2,
+                                    y=70 - bar_height,
+                                    height=bar_height,
+                                    fill=_get_color(d))
+        print >> output, bar_text.format(x=hour * (cw + 1) + cw/2 + 1,
+                                         text=text)
+    print >> output, hr.format(y=70, x=(cw + 1) * 24)
+    print >> output, '</g>'
     print >> output, '</svg>'
-
-    # weekday texts
-#    wday_text = ('<text dx="10" dy="{0}" text-anchor="middle" '
-#                 'style="font-size: 9px; fill: {1};">{2}</text>')
-#    print >> output, wday_text.format(28, '#ccc', 'M')
-#    print >> output, wday_text.format(52, '#ccc', 'W')
-#    print >> output, wday_text.format(76, '#ccc', 'F')
-#    print >> output, wday_text.format(100, '#f99', 'S')
-
-#    # each day/week
-#    print >> output, '<g transform="translate({0}, {0})">'.format(margin + 10)
-#    cell = ('   <rect width="10" height="10" y="{0}" style="fill: {1};">'
-#            '{2}: {3}</rect>')
-#    empty = '   <rect width="10" height="10" y="{0}" style="fill: {1};"/>'
-#    date = firstDay
-#    column = 0
-#    while date < lastDay:
-#        print >> output, '  <g transform="translate({}, 0)">'.format(column * 12)
-#        for i in xrange(7):
-#            data = _get_data(date)
-#            color = _get_color(data)
-#            if data > 0:
-#                print >> output, cell.format(i * 12, color, date, data)
-#            else:
-#                print >> output, empty.format(i * 12, color)
-#            date += datetime.timedelta(days=1)
-#        column += 1
-#        print >> output, '  </g>'
-#
-#    print >> output, '</g>'
 
 
 gflags.DEFINE_string('since', None, 'generate stats from this day')
