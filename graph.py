@@ -16,6 +16,7 @@
 # limitations under the License.
 
 
+import colorsys
 import datetime
 import os
 import subprocess
@@ -49,6 +50,7 @@ def print_graph(output, stats, minDay, maxDay):
     firstDay = minDay - datetime.timedelta(days=minDay.weekday())
     skip = (7 - maxDay.weekday())
     lastDay = maxDay + datetime.timedelta(days=skip)
+    weekly = [0] * ((lastDay - firstDay).days / 7)
 
     def _get_data(d):
         return stats.get(d, 0)
@@ -64,6 +66,8 @@ def print_graph(output, stats, minDay, maxDay):
     # cell width = 10, intra-cell = 2, margin for text = 10
     width = 12 * int((lastDay - firstDay).days / 7) - 2 + margin * 2 + 10
     height = 12 * 7 - 2 + margin * 2 + 10
+    if FLAGS.weekly:
+        height += 50 + 10
 
     # svg boilerplate
     print >> output, '<?xml version="1.0" standalone="no"?>'
@@ -113,13 +117,47 @@ def print_graph(output, stats, minDay, maxDay):
             else:
                 print >> output, empty.format(i * 12, color)
             date += datetime.timedelta(days=1)
+            weekly[column] += data
         column += 1
         print >> output, '  </g>'
-
     print >> output, '</g>'
+
+    if FLAGS.weekly:
+        maxima = max(weekly)
+        c1 = colorsys.rgb_to_hls(0.1176, 0.4078, 0.1372)
+        c2 = colorsys.rgb_to_hls(0.8392, 0.9019, 0.5215)
+
+        def _get_bar_color(v):
+            if v == 0:
+                return '#ffffff'
+            p = v / float(maxima)
+            q = 1.0 - p
+            c = (c1[0] * p + c2[0] * q, c1[1] * p + c2[1] * q,
+                 c1[2] * p + c2[2] * q)
+            c = colorsys.hls_to_rgb(*c)
+            c = tuple(int(_c * 255) for _c in c)
+            return '#%02x%02x%02x' % c
+
+        bar = ('  <rect width="8" height="{height}" x="{x}" y="{y}" '
+               'style="fill: {fill}"/>')
+        print >> output, '<g transform="translate({0}, {1})">'.format(
+                          margin + 10, height - 10 - 50)
+        for week in xrange(len(weekly)):
+            if weekly[week] == 0:
+                continue
+            bar_height = 50.0 * weekly[week] / maxima
+            print >> output, bar.format(x=week * 12 + 2,
+                                        y=50 - bar_height,
+                                        height=bar_height,
+                                        fill=_get_bar_color(weekly[week]))
+        hr = ('  <line x1="0" y1="{y}" x2="{x}" y2="{y}" '
+              'style="stroke-width: 0.9; stroke: #eee; stroke-opacity: 1;"/>')
+        print >> output, hr.format(x=width - margin * 2 - 10, y=50)
+        print >> output, '</g>'
     print >> output, '</svg>'
 
 
+gflags.DEFINE_boolean('weekly', True, 'also draw weekly summary')
 gflags.DEFINE_string('since', None, 'generate stats from this day')
 gflags.DEFINE_string('until', None, 'generate stats to this day')
 gflags.DEFINE_string('out', None, 'output file to save graph')
