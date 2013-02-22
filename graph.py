@@ -31,7 +31,10 @@ FLAGS = gflags.FLAGS
 def read_commits(repo_path, branches, since, stats=None):
     stats = stats or {}
     local_offset = datetime.timedelta(seconds=time.timezone)
-    log_cmd = ['git', 'log', '--pretty=format:%ci'] + list(branches)
+    log_cmd = ['git', 'log', '--pretty=format:%ci']
+    if FLAGS.author:
+        log_cmd += ['--author=' + FLAGS.author]
+    log_cmd += list(branches)
     result = subprocess.check_output(log_cmd, cwd=repo_path, shell=False)
     for line in result.split('\n'):
         d, t, tz = line.split(' ')
@@ -157,6 +160,7 @@ def print_graph(output, stats, minDay, maxDay):
     print >> output, '</svg>'
 
 
+gflags.DEFINE_string('author', None, 'author to visualize (regex)')
 gflags.DEFINE_boolean('weekly', True, 'also draw weekly summary')
 gflags.DEFINE_string('since', None, 'generate stats from this day')
 gflags.DEFINE_string('until', None, 'generate stats to this day')

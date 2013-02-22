@@ -32,7 +32,10 @@ def read_commits(repo_path, branches, since, stats=None):
     stats = stats or ([0] * (24 * 7))
     local_offset = datetime.timedelta(seconds=time.timezone)
     # uses `author-date' in iso8601 format
-    log_cmd = ['git', 'log', '--pretty=format:%ai'] + list(branches)
+    log_cmd = ['git', 'log', '--pretty=format:%ai']
+    if FLAGS.author:
+        log_cmd += ['--author=' + FLAGS.author]
+    log_cmd += list(branches)
     result = subprocess.check_output(log_cmd, cwd=repo_path, shell=False)
     for line in result.split('\n'):
         d, t, tz = line.split(' ')
@@ -43,7 +46,7 @@ def read_commits(repo_path, branches, since, stats=None):
         dt_local = dt + delta + local_offset
         if dt_local.date() < since:
             continue
-        # Intentionaly using auhtor's timezone, since I'm interested in
+        # Intentionaly using author's timezone, since I'm interested in
         # author-time (in one's timezone)
         stats[dt.weekday() * 24 + dt.hour] += 1
     return stats
@@ -167,6 +170,7 @@ def print_heatmap(output, stats):
     print >> output, '</svg>'
 
 
+gflags.DEFINE_string('author', None, 'author to visualize (regex)')
 gflags.DEFINE_string('since', None, 'generate stats from this day')
 gflags.DEFINE_string('until', None, 'generate stats to this day')
 gflags.DEFINE_string('out', None, 'output file to save graph')
