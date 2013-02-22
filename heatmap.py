@@ -165,7 +165,9 @@ def print_heatmap(output, stats):
                                     fill=_get_color(d))
         print >> output, bar_text.format(x=hour * (cw + 1) + cw/2 + 1,
                                          text=text)
-    print >> output, hr.format(y=70, x=(cw + 1) * 24)
+    print >> output, ('  <line x1="0" y1="{y}" x2="{x}" y2="{y}" '
+                      'style="stroke-width: 0.6; stroke: black;"/>').format(
+                            x=(cw + 1) * 24, y=70)
     print >> output, '</g>'
     print >> output, '</svg>'
 
