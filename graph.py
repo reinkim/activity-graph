@@ -158,12 +158,12 @@ def print_graph(output, stats, minDay, maxDay):
                 continue
             bar_height = 50.0 * weekly[week] / maxima
             print >> output, bar.format(x=week * 12 + 2,
-                                        y=0,
+                                        y=50 - bar_height,
                                         height=bar_height,
                                         fill=get_color(weekly[week]))
         hr = ('  <line x1="0" y1="{y}" x2="{x}" y2="{y}" '
               'style="stroke-width: 0.9; stroke: #eee; stroke-opacity: 1;"/>')
-        print >> output, hr.format(x=main_width - margin * 2 - 10, y=0)
+        print >> output, hr.format(x=main_width - margin * 2 - 10, y=50)
         print >> output, '</g>'
 
     print >> output, '<g transform="translate({0}, {1})">'.format(
