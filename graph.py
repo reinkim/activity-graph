@@ -75,12 +75,16 @@ def print_graph(output, stats, minDay, maxDay):
     if FLAGS.weekly:
         height += 50 + 10
 
+    scale = 1.7
+
     # svg boilerplate
     print >> output, '<?xml version="1.0" standalone="no"?>'
     print >> output, '<svg xmlns="http://www.w3.org/2000/svg"',
-    print >> output, 'width="{}" height="{}">'.format(width, height)
+    print >> output, 'width="{}" height="{}">'.format(width * scale,
+                                                      height * scale)
     print >> output, '<!-- {} ~ {} -->'.format(minDay, maxDay)
     print >> output, '<!-- {} ~ {} -->'.format(firstDay, lastDay)
+    print >> output, '<g transform="scale({})">'.format(scale)
 
     # weekday texts
     wday_text = ('<text dx="10" dy="{0}" text-anchor="middle" '
@@ -181,6 +185,7 @@ def print_graph(output, stats, minDay, maxDay):
     print >> output, vr.format(height=main_height - 30)
     print >> output, '</g>'
 
+    print >> output, '</g> <!-- end of scale -->'
     print >> output, '</svg>'
 
 
